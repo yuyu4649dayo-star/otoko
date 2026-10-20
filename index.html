@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ショート撃ち</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#stage{position:fixed;inset:0;margin:auto;max-width:430px;width:100%;height:100%;overflow:hidden;background:#000}
+.hidden{display:none!important}
+
+/* 画面（性別選択・ゲームオーバー） */
+.screen{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;background:#0b0b10}
+h1{font-size:44px;margin:0 0 8px;font-weight:900;letter-spacing:.5px;text-shadow:0 0 18px #ff3d7f}
+h2{font-size:40px;margin:0 0 8px;font-weight:900;color:#ff3d7f;text-shadow:0 0 16px #ff3d7f55}
+.sub{opacity:.75;margin:0 0 22px;font-size:15px}
+.rules{text-align:left;font-size:14px;line-height:1.8;background:rgba(255,255,255,.07);border-radius:14px;padding:14px 18px;margin:0 0 26px;list-style:none;width:100%;max-width:320px}
+.gbtns{display:flex;flex-direction:column;gap:14px;width:100%;max-width:320px}
+button{font:inherit;cursor:pointer;border:0;border-radius:16px;padding:18px;font-size:19px;font-weight:800;color:#fff;transition:transform .1s}
+button:active{transform:scale(.97)}
+.btn-m{background:linear-gradient(135deg,#2f80ed,#1b4fbf)}
+.btn-f{background:linear-gradient(135deg,#ff5fa2,#c2185b)}
+.btn-sub{background:rgba(255,255,255,.12);font-size:15px;font-weight:700;padding:14px}
+.score-box{font-size:18px;line-height:1.9;margin:0 0 22px}
+.score-box b{font-size:30px;color:#ffd400}
+.reason{color:#ffb3c7;font-weight:700;margin:0 0 14px;font-size:16px}
+
+/* ゲーム */
+#game{position:absolute;inset:0;z-index:5;background:#000}
+#hud{position:absolute;top:0;left:0;right:0;z-index:20;padding:14px 16px 30px;background:linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,0));display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+#score{font-size:36px;font-weight:900;text-shadow:0 2px 6px #000;line-height:1}
+#target{font-size:14px;font-weight:800;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:99px;margin-bottom:6px;display:inline-block}
+#hint{font-size:11px;opacity:.85;text-shadow:0 1px 3px #000}
+#best{font-size:12px;opacity:.85;text-align:right;text-shadow:0 1px 3px #000}
+
+#feed{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:crosshair}
+.card{position:absolute;inset:0;transition:transform .3s ease,opacity .3s ease;overflow:hidden;will-change:transform}
+.card.enter{transform:translateY(100%)}
+.card.up{transform:translateY(-100%)}
+.card.shot{opacity:0;transform:scale(1.06)}
+.bg{position:absolute;inset:0}
+.figure{position:absolute;left:50%;top:50%;width:58%;max-width:250px;transform:translate(-50%,-52%);transition:transform .3s ease,opacity .3s ease}
+.card.shot .figure{transform:translate(-50%,-30%) rotate(-25deg);opacity:.2}
+.figure svg{width:100%;height:auto;display:block;filter:drop-shadow(0 10px 20px rgba(0,0,0,.35))}
+.side{position:absolute;right:12px;bottom:130px;display:flex;flex-direction:column;gap:18px;text-align:center;font-size:30px;text-shadow:0 2px 6px #000}
+.side small{display:block;font-size:12px;font-weight:700}
+.info{position:absolute;left:16px;right:80px;bottom:90px;text-align:left;text-shadow:0 1px 4px #000}
+.info b{font-size:16px}
+.info p{margin:6px 0 0;font-size:14px}
+.timer{position:absolute;top:0;left:0;right:0;height:5px;background:rgba(255,255,255,.2);z-index:2}
+.timer i{display:block;height:100%;width:100%;background:#fff}
+.boom{position:absolute;top:36%;left:0;right:0;text-align:center;font:900 62px system-ui,sans-serif;color:#ffd400;text-shadow:0 4px 0 #b33,0 0 22px #ff0;animation:boom .5s ease-out forwards;pointer-events:none;z-index:3}
+@keyframes boom{0%{transform:scale(.3);opacity:0}30%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:0}}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 性別選択 -->
+  <div id="start" class="screen">
+    <h1>ショート撃ち</h1>
+    <p class="sub">撃つ相手の性別を選んでください</p>
+    <ul class="rules">
+      <li>✅ 選んだ性別が出たら → <b>タップで撃つ</b></li>
+      <li>✅ それ以外の性別が出たら → <b>上スワイプでスライド</b></li>
+      <li>❌ 間違えたら即ゲームオーバー</li>
+    </ul>
+    <div class="gbtns">
+      <button class="btn-m" data-gender="male">👨 男性を撃つ</button>
+      <button class="btn-f" data-gender="female">👩 女性を撃つ</button>
+    </div>
+  </div>
+
+  <!-- ゲーム画面 -->
+  <div id="game" class="hidden">
+    <div id="feed"></div>
+    <div id="hud">
+      <div>
+        <div id="score">0</div>
+        <div id="target"></div>
+      </div>
+      <div>
+        <div id="best"></div>
+        <div id="hint">タップ＝撃つ ／ 上スワイプ＝スライド</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ゲームオーバー -->
+  <div id="over" class="screen hidden">
+    <h2>GAME OVER</h2>
+    <p id="reason" class="reason"></p>
+    <div class="score-box">
+      スコア <b id="over-score">0</b><br>
+      ベスト <span id="over-best">0</span>
+    </div>
+    <div class="gbtns">
+      <button class="btn-m" id="retry">もう一度</button>
+      <button class="btn-sub" id="reselect">性別を選び直す</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  const USERS = ['@mint_vibes', '@tokyo.daily', '@ramen_run', '@yoru_no_bgm', '@sora_clip', '@nico_dance'];
+  const CAPTIONS = ['今日のコーデ🔥', 'これ見て…', 'ぐるぐる回る', 'まじでやばい', '#fyp', 'ねむい', 'えぐい'];
+  const SKINS = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'];
+  const HAIRS = ['#1b1b1b', '#3b2314', '#4a2c17', '#c9a227', '#6b3e26', '#2b2b40'];
+
+  let chosen = null;      // 撃つ性別 'male' | 'female'
+  let score = 0;
+  let best = Number(localStorage.getItem('shootSlideBest')) || 0;
+  let current = null;     // 今表示中のカード
+  let busy = false;       // 反応中（次のカードに移るまで入力を受けない）
+  let running = false;
+  let timeoutId = null;
+
+  /* ---------- 効果音（WebAudioで合成） ---------- */
+  let actx = null, noiseBuf = null;
+  function audio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      return actx;
+    } catch (e) { return null; }
+  }
+  function getNoise(c) {
+    if (!noiseBuf) {
+      noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return noiseBuf;
+  }
+  // ノイズ（フィルタの周波数をスイープ）
+  function noise(c, t, dur, type, f1, f2, vol, q = 1) {
+    const src = c.createBufferSource();
+    src.buffer = getNoise(c);
+    const flt = c.createBiquadFilter();
+    flt.type = type;
+    flt.Q.value = q;
+    flt.frequency.setValueAtTime(f1, t);
+    flt.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(flt).connect(g).connect(c.destination);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+  // 音程が変化するオシレーター
+  function osc(c, t, type, f1, f2, dur, vol) {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f1, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f2, 1), t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(c.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+  // 撃つ：乾いた発砲音（クラック＋低音の衝撃）
+  function sfxShot() {
+    const c = audio(); if (!c) return;
+    const t = c.currentTime;
+    noise(c, t, 0.02, 'highpass', 3000, 1500, 0.9, 0.5);        // クラック
+    noise(c, t, 0.22, 'lowpass', 5000, 180, 0.8, 0.6);          // 炸裂
+    osc(c, t, 'sine', 140, 38, 0.3, 0.9);                       // 低音の衝撃
+    noise(c, t + 0.05, 0.18, 'bandpass', 1500, 600, 0.12, 2);   // 余韻
+    vibrate(25);
+  }
+  // スライド：シュッという風切り音＋小さなポップ
+  function sfxSlide() {
+    const c = audio(); if (!c) return;
+    const t = c.currentTime;
+    noise(c, t, 0.3, 'bandpass', 250, 2600, 0.35, 1.4);         // 風切り
+    osc(c, t + 0.24, 'sine', 900, 1500, 0.09, 0.12);            // ポップ
+    osc(c, t + 0.24, 'triangle', 1800, 2400, 0.05, 0.05);
+  }
+  // ゲームオーバー：下降する不協和音＋ざらついた低音
+  function sfxGameOver() {
+    const c = audio(); if (!c) return;
+    const t = c.currentTime;
+    osc(c, t, 'sawtooth', 440, 55, 1.0, 0.22);
+    osc(c, t + 0.06, 'square', 330, 42, 1.0, 0.1);
+    osc(c, t + 0.12, 'sawtooth', 277, 36, 1.0, 0.1);
+    noise(c, t, 1.0, 'lowpass', 900, 70, 0.5, 0.5);
+    vibrate([120, 80, 260]);
+  }
+
+  /* ---------- 人物のSVG（最初のシンプルな版） ---------- */
+  function figureSVG(g) {
+    const skin = pick(SKINS), hair = pick(HAIRS);
+    const cloth = `hsl(${rnd(0, 360)} 65% 55%)`;
+    const face = `
+      <circle cx="84" cy="94" r="4" fill="#222"/>
+      <circle cx="116" cy="94" r="4" fill="#222"/>
+      <circle cx="76" cy="108" r="6" fill="#ff8a8a" opacity=".5"/>
+      <circle cx="124" cy="108" r="6" fill="#ff8a8a" opacity=".5"/>
+      <path d="M88 118 Q100 128 112 118" stroke="#222" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    if (g === 'male') {
+      return `<svg viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+        <path d="M42 300 L42 172 Q42 138 78 136 L122 136 Q158 138 158 172 L158 300Z" fill="${cloth}"/>
+        <rect x="88" y="120" width="24" height="28" fill="${skin}"/>
+        <ellipse cx="100" cy="90" rx="44" ry="50" fill="${skin}"/>
+        <path d="M56 84 Q54 34 100 34 Q146 34 144 84 Q132 58 100 58 Q72 58 56 84Z" fill="${hair}"/>
+        ${face}
+      </svg>`;
+    }
+    return `<svg viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50 96 Q42 26 100 26 Q158 26 150 96 L166 232 Q100 252 34 232Z" fill="${hair}"/>
+      <path d="M72 140 L128 140 L168 300 L32 300Z" fill="${cloth}"/>
+      <rect x="88" y="120" width="24" height="28" fill="${skin}"/>
+      <ellipse cx="100" cy="90" rx="40" ry="48" fill="${skin}"/>
+      <path d="M60 86 Q64 38 100 40 Q138 38 140 86 Q124 58 100 58 Q76 58 60 86Z" fill="${hair}"/>
+      ${face}
+    </svg>`;
+  }
+
+  /* ---------- カード生成 ---------- */
+  function makeCard(gender) {
+    const c = document.createElement('div');
+    c.className = 'card enter';
+    c.dataset.gender = gender;
+    const h = rnd(0, 359);
+    c.innerHTML = `
+      <div class="bg" style="background:linear-gradient(160deg,hsl(${h} 70% 38%),hsl(${(h + 60) % 360} 80% 14%))"></div>
+      <div class="figure">${figureSVG(gender)}</div>
+      <div class="side">
+        <div>❤️<small>${rnd(1, 999)}</small></div>
+        <div>💬<small>${rnd(1, 300)}</small></div>
+        <div>↗️<small>${rnd(1, 99)}</small></div>
+      </div>
+      <div class="info"><b>${pick(USERS)}</b><p>${pick(CAPTIONS)}</p></div>
+      <div class="timer"><i></i></div>`;
+    $('#feed').appendChild(c);
+    c.offsetHeight; // 初期位置を確定させてからアニメーションさせる
+    c.classList.remove('enter');
+    return c;
+  }
+
+  /* ---------- 次のカードへ ---------- */
+  function nextCard(outType) {
+    const prev = current;
+    if (prev) {
+      prev.classList.add(outType === 'shot' ? 'shot' : 'up');
+      setTimeout(() => prev.remove(), 320);
+    }
+    const gender = Math.random() < 0.5 ? 'male' : 'female';
+    current = makeCard(gender);
+
+    // 制限時間（スコアが上がるほど短くなる）
+    const dur = Math.max(800, 2200 - score * 70);
+    const bar = current.querySelector('.timer i');
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    bar.offsetWidth;
+    bar.style.transition = `width ${dur}ms linear`;
+    bar.style.width = '0%';
+
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => act('slide', true), dur);
+    busy = false;
+  }
+
+  /* ---------- 判定 ---------- */
+  function act(type, timedOut = false) {
+    if (!running || busy || !current) return;
+    clearTimeout(timeoutId);
+    busy = true;
+    const isTarget = current.dataset.gender === chosen;
+
+    if (type === 'shoot') {
+      if (!isTarget) return gameOver('撃ってはいけない相手を撃ってしまった！');
+      score++;
+      updateHUD();
+      sfxShot();
+      const boom = document.createElement('div');
+      boom.className = 'boom';
+      boom.textContent = 'BANG!';
+      current.appendChild(boom);
+      nextCard('shot');
+    } else {
+      if (isTarget) {
+        return gameOver(timedOut
+          ? '時間切れ！撃つべき相手を逃してしまった'
+          : '撃つべき相手をスライドしてしまった！');
+      }
+      score++;
+      updateHUD();
+      sfxSlide();
+      nextCard('up');
+    }
+  }
+
+  /* ---------- 進行 ---------- */
+  function updateHUD() {
+    $('#score').textContent = score;
+    $('#best').textContent = `BEST ${Math.max(best, score)}`;
+  }
+
+  function startGame(g) {
+    audio(); // ユーザー操作のタイミングで音声を有効化
+    chosen = g;
+    score = 0;
+    running = true;
+    busy = false;
+    current = null;
+    $('#feed').innerHTML = '';
+    $('#target').textContent = `撃つ相手：${g === 'male' ? '👨 男性' : '👩 女性'}`;
+    $('#start').classList.add('hidden');
+    $('#over').classList.add('hidden');
+    $('#game').classList.remove('hidden');
+    updateHUD();
+    nextCard(null);
+  }
+
+  function gameOver(reason) {
+    running = false;
+    clearTimeout(timeoutId);
+    sfxGameOver();
+    if (score > best) {
+      best = score;
+      localStorage.setItem('shootSlideBest', String(best));
+    }
+    $('#reason').textContent = reason;
+    $('#over-score').textContent = score;
+    $('#over-best').textContent = best;
+    $('#game').classList.add('hidden');
+    $('#over').classList.remove('hidden');
+  }
+
+  function showSelect() {
+    running = false;
+    clearTimeout(timeoutId);
+    $('#over').classList.add('hidden');
+    $('#game').classList.add('hidden');
+    $('#start').classList.remove('hidden');
+  }
+
+  /* ---------- 入力：タップで撃つ、上スワイプでスライド ---------- */
+  const feed = $('#feed');
+  let startY = null;
+  feed.addEventListener('pointerdown', e => { startY = e.clientY; });
+  feed.addEventListener('pointerup', e => {
+    if (startY === null) return;
+    const dy = startY - e.clientY;   // 上にスワイプすると正の値
+    startY = null;
+    if (dy > 60) act('slide');
+    else if (Math.abs(dy) < 12) act('shoot');
+  });
+  feed.addEventListener('pointercancel', () => { startY = null; });
+
+  /* ---------- キーボード（PC用） ---------- */
+  document.addEventListener('keydown', e => {
+    if (!running) return;
+    if (e.code === 'ArrowUp' || e.code === 'KeyS') { e.preventDefault(); act('slide'); }
+    else if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); act('shoot'); }
+  });
+
+  /* ---------- ボタン ---------- */
+  document.querySelectorAll('[data-gender]').forEach(b =>
+    b.addEventListener('click', () => startGame(b.dataset.gender)));
+  $('#retry').addEventListener('click', () => startGame(chosen));
+  $('#reselect').addEventListener('click', showSelect);
+})();
+</script>
+</body>
+</html>
